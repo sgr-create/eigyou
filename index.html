@@ -56,6 +56,10 @@
   .screen { display: none; min-height: 100vh; padding-bottom: 80px; }
   .screen.active { display: block; animation: fadeIn 0.2s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulse-green {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0, 229, 160, 0.5); }
+    50% { box-shadow: 0 0 0 6px rgba(0, 229, 160, 0); }
+  }
 
   /* ===== TOP BAR ===== */
   .topbar {
@@ -674,8 +678,15 @@
       <div class="topbar-title">顧客リスト</div>
       <div class="topbar-sub" id="list-count">全5社</div>
     </div>
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px;align-items:center">
       <button class="topbar-action" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent2)" onclick="exportToCSV()">📥 CSV出力</button>
+      <button id="update-btn" onclick="applyUpdate()" style="
+        display:none;
+        background:#1a3a2a; border:1px solid var(--accent2); color:var(--accent2);
+        padding:8px 12px; border-radius:20px; font-size:12px; font-weight:700;
+        font-family:inherit; cursor:pointer;
+        animation: pulse-green 1.5s infinite;
+      ">🔄 更新</button>
       <button class="topbar-action" onclick="showModal('modal-add')">＋ 追加</button>
     </div>
   </div>
@@ -1215,6 +1226,25 @@
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+
+<!-- アプリ更新バナー -->
+<div id="update-banner" style="
+  display:none; position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+  width:calc(100% - 32px); max-width:398px;
+  background:#1a3a2a; border:1px solid var(--accent2); border-radius:14px;
+  padding:14px 16px; z-index:9999;
+  display:none; align-items:center; gap:12px; box-shadow:0 4px 20px rgba(0,0,0,0.4);
+">
+  <span style="font-size:20px">🔄</span>
+  <div style="flex:1">
+    <div style="font-size:13px; font-weight:700; color:var(--accent2)">新しいバージョンがあります</div>
+    <div style="font-size:11px; color:var(--text2); margin-top:2px">タップして最新版に更新</div>
+  </div>
+  <button onclick="applyUpdate()" style="
+    background:var(--accent2); color:#000; border:none; border-radius:20px;
+    padding:8px 16px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer;
+  ">更新する</button>
+</div>
 
 <script>
   // 今日の日付
@@ -1799,13 +1829,50 @@
     showToast(`📥 CSVをダウンロードしました（${customers.length}件）`);
   }
 
-  // ロード時＆オンライン復帰時の処理
-  window.addEventListener('load', () => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('ServiceWorker registered'))
-        .catch(err => console.error('ServiceWorker error', err));
+  // ===== アプリ更新検知 & 更新バナー =====
+  let newWorker = null;
+
+  function showUpdateBanner() {
+    // トップバーの更新ボタンを表示
+    const btn = document.getElementById('update-btn');
+    if (btn) btn.style.display = 'inline-block';
+    // 旧バナーも表示（念のため）
+    const banner = document.getElementById('update-banner');
+    if (banner) banner.style.display = 'flex';
+  }
+
+  function applyUpdate() {
+    if (newWorker) {
+      newWorker.postMessage({ action: 'skipWaiting' });
     }
+    window.location.reload();
+  }
+
+  window.addEventListener('load', () => {
+    if (!('serviceWorker' in navigator)) return;
+
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      // 既に待機中のSWがあれば即バナー表示
+      if (reg.waiting) {
+        newWorker = reg.waiting;
+        showUpdateBanner();
+      }
+
+      // 新しいSWが見つかった時
+      reg.addEventListener('updatefound', () => {
+        newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner();
+          }
+        });
+      });
+    }).catch(err => console.error('SW error:', err));
+
+    // SWがskipWaiting後にページをリロード
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.location.reload();
+    });
   });
 
   function showToast(msg) {

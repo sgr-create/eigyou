@@ -35,6 +35,13 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
+// アプリからのskipWaitingメッセージを受信
+self.addEventListener('message', event => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
+});
+
 // フェッチ時：自サイトのファイルのみキャッシュ、外部は全スルー
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
