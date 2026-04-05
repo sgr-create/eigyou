@@ -1715,8 +1715,7 @@
 
 
   // ===== Google Sheets エクスポート（GAS連携 & オフラインバッファ） =====
-  // ★ GASをデプロイ後、下記URLを新しいデプロイURLに書き換えてください ★
-  const GAS_URL = 'YOUR_GAS_DEPLOY_URL_HERE';
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbxNi_T58_1fI-6Jd2Omjg9cuPZK8ew0jUrNgjAdECIiynWkqxJTjsCPQeoWmOQ0jhUUbA/exec';
 
   function saveOfflineBuffer(payload) {
     localStorage.setItem('sales_app_offline_buffer', JSON.stringify(payload));
