@@ -629,7 +629,7 @@
       </div>
       <div class="status-row">
         <div class="status-dot" style="background:var(--status-quote)"></div>
-        <div class="status-name">見積もり</div>
+        <div class="status-name">見積アり</div>
         <div class="status-track"><div class="status-fill" style="width:17%;background:var(--status-quote)"></div></div>
         <div class="status-count">8</div>
       </div>
@@ -679,7 +679,7 @@
       <div class="topbar-sub" id="list-count">全5社</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <button class="topbar-action" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent2)" onclick="exportToCSV()">📥 CSV出力</button>
+      <button class="topbar-action" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent2)" onclick="exportToSheets()">📤 書き出し</button>
       <button id="update-btn" onclick="applyUpdate()" style="
         display:none;
         background:#1a3a2a; border:1px solid var(--accent2); color:var(--accent2);
@@ -1117,7 +1117,7 @@
   </button>
   <button class="nav-item" onclick="showScreen('screen-log',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-    訪問ログ
+    蚪問ログ
   </button>
   <button class="nav-item" onclick="showScreen('screen-report',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -1210,7 +1210,7 @@
   </div>
 </div>
 
-<!-- ===== MODAL: STATUS CHANGE ===== -->
+<!-- ===== MODAL: STATUS RANGE ===== -->
 <div class="modal-overlay" id="modal-status" onclick="closeModalOutside(event,'modal-status')">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -1321,7 +1321,7 @@
 
   if (customers.length === 0) {
     customers = [
-      { id:1, company:'株式会社丸山製作所', person:'鈴木 太郎 部長', category:'working', status:'反応あり', phone:'0532-00-0000', address:'愛知県豊橋市神明町42-1', nextVisitDate:'2025/03/22', visitCount:'4回目', lastVisitDays:10, lastVisitDate:'2024年12月10日', alert:'warn', memo:'作業服上下・安全靴に興味あり。4月の新入社員研修に合わせて検討したい。予算は1人あたり1.5万円程度。' },
+      { id:1, company:'株式会社丸山製作所', person:'鈴木 太郎 部長', category:'working', status:'反応あり', phone:'0532-00-0000', address:'愛知県豊橋市神明町42-1', nextVisitDate:'2025/03/22', visitCount:'4回目', lastVisitDays:10, lastVisitDate:'2024年12月10日', alert:'warn', memo:'作業服上下・安全靴に興味あり。4月の新入社員研修に合わせて検討したあ。予算は1人あたり1.5万円程度。' },
       { id:2, company:'医療法人明和会',     person:'田中 義雄 院長', category:'medical', status:'見積もり', phone:'0532-11-2222', address:'愛知県豊橋市広小路1-1', nextVisitDate:'2025/03/25', visitCount:'6回目', lastVisitDays:20, lastVisitDate:'2024年11月15日', alert:'', memo:'ナース服の刷新を検討中。3パターンの見積もりを提出済み。' },
       { id:3, company:'豊川商事株式会社',   person:'山田 花子 課長', category:'service', status:'受注', phone:'0533-88-9999', address:'愛知県豊川市諏訪3-1', nextVisitDate:'2025/04/10', visitCount:'8回目', lastVisitDays:30, lastVisitDate:'2025年02月10日', alert:'', memo:'サービススタッフ用ポロシャツ30着受注。納品スケジュール調整中。' },
       { id:4, company:'浜松工業株式会社',   person:'伊藤 一郎 社長', category:'working', status:'脈なし', phone:'053-444-5555', address:'静岡県浜松市中区1-2-3', nextVisitDate:'未定', visitCount:'1回目', lastVisitDays:128, lastVisitDate:'2024年07月20日', alert:'danger', memo:'既存業者の切り替え予定なし。来年再度アプローチ。' },
@@ -1735,7 +1735,7 @@
     return `${s} 〜 ${e}`;
   }
 
-  // レポートのKPI・ラベルを更新（ダミーデータで変化を演出）
+  // レポートねKPI・ラベルを更新（ダミーデータで変化を演出）
   function updateReport() {
     const label = getPeriodLabel();
     document.getElementById('report-period-label').textContent = label;
@@ -1756,7 +1756,7 @@
       const days = Math.round((new Date(e) - new Date(s)) / 86400000) + 1;
       visits = Math.max(1, Math.round(days * 0.7));
       orders = Math.max(0, Math.round(days * 0.07));
-      sub = `${days}日間の合計`;
+      sub = `${days}f��間の合計`;
     }
     document.getElementById('kpi-visits').textContent = visits;
     document.getElementById('kpi-orders').textContent = orders;
@@ -1776,60 +1776,80 @@
   // ===== GAS URL（名刺スキャン用） =====
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbxNi_T58_1fI-6Jd2Omjg9cuPZK8ew0jUrNgjAdECIiynWkqxJTjsCPQeoWmOQ0jhUUbA/exec';
 
-  // ===== CSV出力（通信不要・完全ローカル処理） =====
-  function exportToCSV() {
-    if (customers.length === 0) {
-      showToast('⚠️ 顧客データがありません');
+  // ===== Googleスプレッドシート書き出し =====
+  function saveOfflineBuffer(payload) {
+    localStorage.setItem('sales_app_offline_buffer', JSON.stringify(payload));
+  }
+
+  async function exportToSheets() {
+    const payload = customers.map(c => ({
+      company:       c.company,
+      person:        c.person,
+      phone:         c.phone,
+      address:       c.address,
+      category:      catLabelMap[c.category] || c.category,
+      status:        c.status,
+      nextVisitDate: c.nextVisitDate,
+      lastVisitDate: c.lastVisitDate,
+      memo:          c.memo,
+      logs:          c.logs
+    }));
+
+    if (!navigator.onLine) {
+      saveOfflineBuffer(payload);
+      showToast('⚠️ オフラインのためローカルに一時保存しました');
       return;
     }
 
-    // ヘッダー行
-    const headers = ['会社名', '担当者名', '電話番号', '住所', 'カテゴリ', 'ステータス', '次回訪問日', '最終訪問日', 'メモ', '訪問履歴'];
+    showToast('Sheetsに送信中…');
+    try {
+      const response = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error('Network error');
+      const result = await response.json();
+      if (result.status === 'success') {
+        showToast('スプレッドシートへの書き出し完了 ✅');
+        localStorage.removeItem('sales_app_offline_buffer');
+      } else {
+        throw new Error(result.message || 'GAS error');
+      }
+    } catch(err) {
+      // 通信失敗時はCSVに自動切替
+      saveOfflineBuffer(payload);
+      showToast('⚠️ 通信失敗：CSVで保存します');
+      exportToCSV();
+    }
+  }
 
-    // データ行
+  // ===== CSVバックアップ出力 =====
+  function exportToCSV() {
+    if (customers.length === 0) { showToast('⚠️ 顧客データがありません'); return; }
+    const headers = ['会社名','担当者名','電話番号','住所','カテゴリ','ステータス','次回訪問日','最終訪問日','メモ','訪問履歴'];
     const rows = customers.map(c => {
       const logsStr = (c.logs && c.logs.length > 0)
-        ? c.logs.map(l => `[${l.count} ${l.date || ''}] ${l.memo || ''}`).join(' / ')
-        : '';
-      return [
-        c.company     || '',
-        c.person      || '',
-        c.phone       || '',
-        c.address     || '',
-        catLabelMap[c.category] || c.category || '',
-        c.status      || '',
-        c.nextVisitDate || '',
-        c.lastVisitDate || '',
-        c.memo        || '',
-        logsStr
-      ];
+        ? c.logs.map(l => `[${l.count} ${l.date||''}] ${l.memo||''}`).join(' / ') : '';
+      return [c.company||'', c.person||'', c.phone||'', c.address||'',
+              catLabelMap[c.category]||c.category||'', c.status||'',
+              c.nextVisitDate||'', c.lastVisitDate||'', c.memo||'', logsStr];
     });
-
-    // CSV文字列を組み立てる（ダブルクォートでエスケープ）
-    const escape = v => `"${String(v).replace(/"/g, '""')}"`;
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(escape).join(','))
-      .join('\n');
-
-    // BOM付きUTF-8（Excelで文字化けしないように）
-    const bom = '\uFEFF';
-    const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const escape = v => `"${String(v).replace(/"/g,'""')}"`;
+    const csv = [headers,...rows].map(r=>r.map(escape).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
     const url = URL.createObjectURL(blob);
-
-    // ダウンロード実行
     const today = new Date().toISOString().split('T')[0];
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `営業リスト_${today}.csv`;
-    document.body.appendChild(a);
-    a.click();
+    a.href = url; a.download = `営業リスト_${today}.csv`;
+    document.body.appendChild(a); a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
     showToast(`📥 CSVをダウンロードしました（${customers.length}件）`);
   }
 
-  // ===== アプリ更新検知 & 更新バナー =====
+  // ===== 訪問播数更新 & 更新バナー =====
   let newWorker = null;
 
   function showUpdateBanner() {
@@ -1838,7 +1858,7 @@
     if (btn) btn.style.display = 'inline-block';
     // 旧バナーも表示（念のため）
     const banner = document.getElementById('update-banner');
-    if (banner) banner.style.display = 'flex';
+    if (banner) b) banner.style.display = 'flex';
   }
 
   function applyUpdate() {
@@ -1858,7 +1878,7 @@
         showUpdateBanner();
       }
 
-      // 新しいSWが見つかった時
+      // 新しえSWが見つかった時
       reg.addEventListener('updatefound', () => {
         newWorker = reg.installing;
         newWorker.addEventListener('statechange', () => {
