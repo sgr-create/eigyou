@@ -1,13 +1,12 @@
 // =============================================
-// Service Worker for 営業リストアプリ
+// Service Worker for 営業リストアプリ v3
 // =============================================
-const CACHE_NAME = 'eigyo-app-v2';
+const CACHE_NAME = 'eigyo-app-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
-  './icon.png',
-  'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=DM+Sans:wght@400;500;700&display=swap'
+  './icon.png'
 ];
 
 // インストール時：必要ファイルをキャッシュ
@@ -15,14 +14,14 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       return cache.addAll(ASSETS_TO_CACHE).catch(err => {
-        console.warn('キャッシュの一部に失敗しました:', err);
+        console.warn('キャッシュ失敗:', err);
       });
     })
   );
   self.skipWaiting();
 });
 
-// アクティベート時：古いキャッシュを削除
+// アクティベート時：古いキャッシュを全削除
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -36,40 +35,28 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// フェッチ時：キャッシュ優先、なければネットワーク
+// フェッチ時：自サイトのファイルのみキャッシュ、外部は全スルー
 self.addEventListener('fetch', event => {
-  // GAS・外部APIへのリクエストはすべてスルーする
-  if (event.request.method === 'POST') {
-    return;
-  }
-  if (event.request.url.includes('script.google.com')) {
-    return;
-  }
-  if (event.request.url.includes('script.googleusercontent.com')) {
-    return;
-  }
-  if (event.request.url.includes('generativelanguage.googleapis.com')) {
-    return;
-  }
-  // 外部ドメイン全般（github.io以外）はスルー
-  if (!event.request.url.includes('sgr-create.github.io') &&
-      !event.request.url.includes('fonts.googleapis.com') &&
-      !event.request.url.includes('fonts.gstatic.com')) {
+  const url = new URL(event.request.url);
+
+  // 外部ドメインへのリクエストはすべてブラウザに任せる（スルー）
+  if (url.origin !== self.location.origin) {
     return;
   }
 
+  // POSTリクエストはキャッシュしない
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // 自サイトのGETリクエスト：キャッシュ優先
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       if (cachedResponse) {
         return cachedResponse;
       }
       return fetch(event.request).then(networkResponse => {
-        // 有効なレスポンスのみキャッシュ
-        if (
-          networkResponse &&
-          networkResponse.status === 200 &&
-          networkResponse.type !== 'opaque'
-        ) {
+        if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, responseToCache);
@@ -77,8 +64,8 @@ self.addEventListener('fetch', event => {
         }
         return networkResponse;
       }).catch(() => {
-        // オフライン時はキャッシュにないリソースは無視
-        return new Response('', { status: 503, statusText: 'Service Unavailable' });
+        // オフライン時：index.htmlにフォールバック
+        return caches.match('./index.html');
       });
     })
   );

@@ -674,7 +674,7 @@
       <div class="topbar-sub" id="list-count">全5社</div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="topbar-action" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent2)" onclick="exportToSheets()">📤 書き出し</button>
+      <button class="topbar-action" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent2)" onclick="exportToCSV()">📥 CSV出力</button>
       <button class="topbar-action" onclick="showModal('modal-add')">＋ 追加</button>
     </div>
   </div>
@@ -1714,96 +1714,68 @@
   document.getElementById('range-end').value   = now.toISOString().split('T')[0];
 
 
-  // ===== Google Sheets エクスポート（GAS連携 & オフラインバッファ） =====
+  // ===== GAS URL（名刺スキャン用） =====
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbxNi_T58_1fI-6Jd2Omjg9cuPZK8ew0jUrNgjAdECIiynWkqxJTjsCPQeoWmOQ0jhUUbA/exec';
 
-  function saveOfflineBuffer(payload) {
-    localStorage.setItem('sales_app_offline_buffer', JSON.stringify(payload));
-  }
-
-  function updateSyncBadge() {
-    const buffer = localStorage.getItem('sales_app_offline_buffer');
-    const btn = document.querySelector('button[onclick="exportToSheets()"]');
-    if (!btn) return;
-    
-    if (buffer) {
-      btn.innerHTML = `⚠️ 未送信あり (再送)`;
-      btn.style.backgroundColor = 'var(--danger)';
-      btn.style.color = '#fff';
-      btn.style.borderColor = 'var(--danger)';
-    } else {
-      btn.innerHTML = `📤 書き出し`;
-      btn.style.backgroundColor = 'var(--surface2)';
-      btn.style.color = 'var(--accent2)';
-      btn.style.borderColor = 'var(--border)';
-    }
-  }
-
-  async function exportToSheets() {
-    const payload = customers.map(c => ({
-      company:       c.company,
-      person:        c.person,
-      phone:         c.phone,
-      address:       c.address,
-      category:      catLabelMap[c.category] || c.category,
-      status:        c.status,
-      nextVisitDate: c.nextVisitDate,
-      lastVisitDate: c.lastVisitDate,
-      memo:          c.memo,
-      logs:          c.logs
-    }));
-
-    // オフライン判定
-    if (!navigator.onLine) {
-      saveOfflineBuffer(payload);
-      showToast('⚠️ オフラインのためローカルに一時保存しました');
-      updateSyncBadge();
+  // ===== CSV出力（通信不要・完全ローカル処理） =====
+  function exportToCSV() {
+    if (customers.length === 0) {
+      showToast('⚠️ 顧客データがありません');
       return;
     }
 
-    showToast('Sheetsに送信中…');
+    // ヘッダー行
+    const headers = ['会社名', '担当者名', '電話番号', '住所', 'カテゴリ', 'ステータス', '次回訪問日', '最終訪問日', 'メモ', '訪問履歴'];
 
-    try {
-      // POST方式で送信。GASのCORS回避策として text/plain を使用
-      const response = await fetch(GAS_URL, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (!response.ok) throw new Error('Network response was not ok');
-      const result = await response.json();
-      
-      if (result.status === 'success') {
-        showToast('Sheetsへの書き出しが完了しました ✅');
-        localStorage.removeItem('sales_app_offline_buffer');
-        updateSyncBadge();
-      } else {
-        throw new Error(result.message || 'GAS error');
-      }
-    } catch(err) {
-      saveOfflineBuffer(payload);
-      showToast('⚠️ 通信失敗: ローカルに一時保存しました');
-      updateSyncBadge();
-      console.error(err);
-    }
+    // データ行
+    const rows = customers.map(c => {
+      const logsStr = (c.logs && c.logs.length > 0)
+        ? c.logs.map(l => `[${l.count} ${l.date || ''}] ${l.memo || ''}`).join(' / ')
+        : '';
+      return [
+        c.company     || '',
+        c.person      || '',
+        c.phone       || '',
+        c.address     || '',
+        catLabelMap[c.category] || c.category || '',
+        c.status      || '',
+        c.nextVisitDate || '',
+        c.lastVisitDate || '',
+        c.memo        || '',
+        logsStr
+      ];
+    });
+
+    // CSV文字列を組み立てる（ダブルクォートでエスケープ）
+    const escape = v => `"${String(v).replace(/"/g, '""')}"`;
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(escape).join(','))
+      .join('\n');
+
+    // BOM付きUTF-8（Excelで文字化けしないように）
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    // ダウンロード実行
+    const today = new Date().toISOString().split('T')[0];
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `営業リスト_${today}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast(`📥 CSVをダウンロードしました（${customers.length}件）`);
   }
 
   // ロード時＆オンライン復帰時の処理
   window.addEventListener('load', () => {
-    updateSyncBadge();
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js')
         .then(reg => console.log('ServiceWorker registered'))
         .catch(err => console.error('ServiceWorker error', err));
-    }
-  });
-
-  window.addEventListener('online', () => {
-    const buffer = localStorage.getItem('sales_app_offline_buffer');
-    if (buffer) {
-      showToast('📶 オンライン復帰: 未送信データを同期します');
-      exportToSheets();
     }
   });
 
