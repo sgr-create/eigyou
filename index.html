@@ -565,6 +565,7 @@
   @keyframes dotPulse { 0%,80%,100%{opacity:0.3;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
   .scan-text { font-size: 14px; color: var(--text2); }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -1134,7 +1135,7 @@
         <div class="scan-dot"></div>
         <div class="scan-dot"></div>
       </div>
-      <div class="scan-text">名刺を読み取っています…</div>
+      <div class="scan-text" id="scan-progress-text">名刺を読み取っています…</div>
     </div>
 
     <div class="form-group" style="padding:0 0 12px">
@@ -1463,74 +1464,102 @@
 
   renderCustomerList();
 
-  // ===== 本物の名刺スキャン＆AI解析 =====
+  // ===== 名刺スキャン（Tesseract.js ブラウザ内OCR・APIキー不要） =====
   function handleImageUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    // モーダルのUIをスキャン中に変更
     document.getElementById('camera-area').style.display = 'none';
     document.getElementById('ai-scanning').classList.add('show');
+    document.getElementById('scan-progress-text').textContent = '準備中… (初回は30秒ほどかかります)';
 
-    // 読み込んでリサイズ・圧縮
     const reader = new FileReader();
     reader.onload = function(event) {
-      const img = new Image();
-      img.onload = function() {
-        const max_size = 1000;
-        let w = img.width;
-        let h = img.height;
-        if (w > h && w > max_size) { h *= max_size / w; w = max_size; }
-        else if (h > max_size) { w *= max_size / h; h = max_size; }
-        
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        
-        // JPEG形式で圧縮して軽量化
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
-        sendImageToGemini(compressedBase64);
-      }
-      img.src = event.target.result;
-    }
+      scanWithTesseract(event.target.result);
+    };
     reader.readAsDataURL(file);
-    e.target.value = ''; // 連続撮影のためにリセット
+    e.target.value = '';
   }
 
-  async function sendImageToGemini(base64Image) {
+  async function scanWithTesseract(imageDataUrl) {
     try {
-      const response = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'scanBusinessCard',
-          imageData: base64Image
-        })
-      });
+      const { data: { text } } = await Tesseract.recognize(
+        imageDataUrl,
+        'jpn+eng',
+        {
+          logger: m => {
+            const el = document.getElementById('scan-progress-text');
+            if (!el) return;
+            if (m.status === 'loading tesseract core') {
+              el.textContent = '読み取りエンジンを準備中…';
+            } else if (m.status === 'initializing tesseract') {
+              el.textContent = '初期化中…';
+            } else if (m.status === 'loading language traineddata') {
+              el.textContent = '日本語データを読み込み中…';
+            } else if (m.status === 'recognizing text') {
+              el.textContent = `読み取り中… ${Math.round(m.progress * 100)}%`;
+            }
+          }
+        }
+      );
 
-      if (!response.ok) throw new Error('通信エラー');
-      const result = await response.json();
-      
-      if (result.status === 'success') {
-        const data = result.data;
-        // フォームへ反映
-        document.getElementById('new-company').value = data.company || '';
-        document.getElementById('new-person').value = data.person || '';
-        document.getElementById('new-phone').value = data.phone || '';
-        showToast('名刺を読み取りました ✨');
-      } else {
-        throw new Error(result.message || 'APIエラー');
-      }
+      const parsed = parseBusinessCardText(text);
+
+      document.getElementById('new-company').value = parsed.company;
+      document.getElementById('new-person').value  = parsed.person;
+      document.getElementById('new-phone').value   = parsed.phone;
+
+      showToast('名刺を読み取りました ✨ 内容をご確認ください');
     } catch(err) {
-      alert('名刺の読み取りに失敗しました。もう少し明るい場所で撮影するか、文字がはっきり見えるようにお試しください。\nエラー詳細: ' + err.message);
-      showToast('⚠️ 解析エラー');
+      showToast('⚠️ 読み取りに失敗しました。明るい場所で再度お試しください。');
       console.error(err);
     } finally {
       document.getElementById('ai-scanning').classList.remove('show');
       document.getElementById('camera-area').style.display = 'block';
     }
+  }
+
+  // OCRテキストから会社名・氏名・電話番号を抽出
+  function parseBusinessCardText(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+    // 電話番号（全角数字も対応）
+    const toHalf = s => s.replace(/[０-９]/g, d => String('０１２３４５６７８９'.indexOf(d)));
+    const phoneReg = /(\d{2,4}[-－ー・]\d{2,4}[-－ー・]\d{4})/;
+    let phone = '';
+    for (const line of lines) {
+      const m = toHalf(line).match(phoneReg);
+      if (m) { phone = m[1]; break; }
+    }
+
+    // 会社名（「株式会社」等を含む行を優先）
+    const corpWords = ['株式会社', '有限会社', '合同会社', '一般社団法人', '公益財団法人', 'Co.', 'Ltd.', 'Inc.', 'Corp.'];
+    let company = '';
+    for (const line of lines) {
+      if (corpWords.some(w => line.includes(w))) {
+        company = line; break;
+      }
+    }
+    // 見つからなければ最初の長い行を会社名候補にする
+    if (!company) {
+      const candidates = lines.filter(l => l.length >= 4 && !phoneReg.test(toHalf(l)) && !l.includes('@'));
+      company = candidates[0] || '';
+    }
+
+    // 氏名（会社名・電話番号・メール以外の短い行）
+    let person = '';
+    for (const line of lines) {
+      if (line === company) continue;
+      if (phoneReg.test(toHalf(line))) continue;
+      if (line.includes('@')) continue;
+      if (corpWords.some(w => line.includes(w))) continue;
+      // 2〜8文字程度の行を氏名候補に
+      if (line.length >= 2 && line.length <= 12) {
+        person = line; break;
+      }
+    }
+
+    return { company, person, phone };
   }
 
   // データ登録アクション群
