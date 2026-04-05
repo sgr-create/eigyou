@@ -1,7 +1,7 @@
 // =============================================
 // Service Worker for 営業リストアプリ
 // =============================================
-const CACHE_NAME = 'eigyo-app-v1';
+const CACHE_NAME = 'eigyo-app-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -38,14 +38,23 @@ self.addEventListener('activate', event => {
 
 // フェッチ時：キャッシュ優先、なければネットワーク
 self.addEventListener('fetch', event => {
-  // GASへのPOSTリクエストはキャッシュしない
+  // GAS・外部APIへのリクエストはすべてスルーする
   if (event.request.method === 'POST') {
     return;
   }
   if (event.request.url.includes('script.google.com')) {
     return;
   }
+  if (event.request.url.includes('script.googleusercontent.com')) {
+    return;
+  }
   if (event.request.url.includes('generativelanguage.googleapis.com')) {
+    return;
+  }
+  // 外部ドメイン全般（github.io以外）はスルー
+  if (!event.request.url.includes('sgr-create.github.io') &&
+      !event.request.url.includes('fonts.googleapis.com') &&
+      !event.request.url.includes('fonts.gstatic.com')) {
     return;
   }
 
